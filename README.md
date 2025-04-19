@@ -25,7 +25,7 @@ A starter template for building fully documented type-safe JSON APIs with Hono a
 Clone this template without git history
 
 ```sh
-npx degit palaska/hono-backend-template my-api
+npx degit palaska/hono-backend my-api
 cd my-api
 ```
 
@@ -89,15 +89,15 @@ All app routes are grouped together and exported into single type as `AppType` i
 
 ## Endpoints
 
-| Path               | Description              |
-| ------------------ | ------------------------ |
-| GET /doc           | Open API Specification   |
-| GET /reference     | Scalar API Documentation |
-| GET /tasks         | List all tasks           |
-| POST /tasks        | Create a task            |
-| GET /tasks/{id}    | Get one task by id       |
-| PATCH /tasks/{id}  | Patch one task by id     |
-| DELETE /tasks/{id} | Delete one task by id    |
+| Path                   | Description              |
+| ---------------------- | ------------------------ |
+| GET /api/doc           | Open API Specification   |
+| GET /api/reference     | Scalar API Documentation |
+| GET /api/tasks         | List all tasks           |
+| POST /api/tasks        | Create a task            |
+| GET /api/tasks/{id}    | Get one task by id       |
+| PATCH /api/tasks/{id}  | Patch one task by id     |
+| DELETE /api/tasks/{id} | Delete one task by id    |
 
 ## References
 
