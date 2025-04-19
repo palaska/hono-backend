@@ -1,0 +1,158 @@
+---
+description: Adding a new endpoint to an existing route module.
+globs: 
+alwaysApply: false
+---
+This rule outlines the process for adding a new endpoint to an existing route module. If you are asked to add an endpoint, follow this guide only add the endpoint, do not do anything else.
+
+## Step 1: Define the Route
+
+Add a new route definition in your `{feature-name}.routes.ts` file:
+
+```typescript
+// Add your new route
+export const yourEndpoint = createRoute({
+  path: "/{feature-name}/{path}",
+  method: "get", // Choose appropriate HTTP method: get, post, put, patch, delete
+  tags,
+  // Add request parameters if needed
+  request: {
+    // For URL params like /users/{id}
+    params: IdParamsSchema,
+    // For query params like ?page=1&limit=10
+    query: z.object({
+      page: z.number().optional(),
+      limit: z.number().optional(),
+    }),
+    // For request body (POST, PUT, PATCH)
+    body: jsonContentRequired(
+      yourSchema,
+      "Description of the request body",
+    ),
+  },
+  // Define expected responses
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      responseSchema,
+      "Description of successful response",
+    ),
+    // Add error responses as needed
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Resource not found",
+    ),
+    [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
+      createErrorSchema(yourSchema),
+      "Validation error(s)",
+    ),
+  },
+});
+
+// Add the type export at the end of the file
+export type YourEndpointRoute = typeof yourEndpoint;
+```
+
+## Step 2: Create the Handler
+
+Add a new handler function in your `{feature-name}.handlers.ts` file:
+
+```typescript
+import type { YourEndpointRoute } from "./{feature-name}.routes";
+
+export const yourEndpoint: AppRouteHandler<YourEndpointRoute> = async (c) => {
+  const { db } = createDb(c.env);
+
+  // Extract request data if needed
+  const { id } = c.req.valid("param");
+  const { page, limit } = c.req.valid("query");
+  const requestBody = c.req.valid("json");
+
+  // Implement your business logic
+  // Example:
+  const result = await db.query.yourTable.findMany({
+    where(fields, operators) {
+      return operators.eq(fields.someField, someValue);
+    },
+    limit,
+    offset: (page - 1) * limit,
+  });
+
+  // Handle not found
+  if (!result || result.length === 0) {
+    return c.json(
+      {
+        message: HttpStatusPhrases.NOT_FOUND,
+      },
+      HttpStatusCodes.NOT_FOUND,
+    );
+  }
+
+  // Return success response
+  return c.json(result, HttpStatusCodes.OK);
+};
+```
+
+## Step 3: Register the Endpoint
+
+Update your `{feature-name}.index.ts` file to register the new endpoint:
+
+```typescript
+const router = createRouter()
+  // Existing routes
+  .openapi(routes.list, handlers.list)
+  .openapi(routes.create, handlers.create)
+  // Add your new endpoint
+  .openapi(routes.yourEndpoint, handlers.yourEndpoint);
+
+export default router;
+```
+
+## Step 4: Add Tests
+
+Add tests for your new endpoint in the `{feature-name}.test.ts` file:
+
+```typescript
+describe("Your Endpoint", () => {
+  const app = createTestClient();
+
+  it("should successfully handle the request", async () => {
+    const res = await app.api.get("/{feature-name}/{path}");
+    expect(res.status).toBe(200);
+    // Add more assertions as needed
+    const data = await res.json();
+    expect(data).toMatchObject(/* expected structure */);
+  });
+
+  it("should handle error cases", async () => {
+    const res = await app.api.get("/{feature-name}/invalid-path");
+    expect(res.status).toBe(404);
+    // Add more assertions for error cases
+  });
+});
+```
+
+## Best Practices
+
+1. **Consistent Naming:**
+
+   - Use descriptive names for your endpoints that reflect their purpose
+   - Follow the same naming patterns as other endpoints in the codebase
+
+2. **Request Validation:**
+
+   - Always validate request parameters using Zod schemas
+   - Provide clear error messages for validation failures
+
+3. **Response Structure:**
+
+   - Be consistent with response formats
+   - Document all possible response types in the OpenAPI definition
+
+4. **Error Handling:**
+
+   - Return appropriate HTTP status codes
+   - Include descriptive error messages that help consumers understand the issue
+
+5. **Testing:**
+   - Test happy paths and error cases
+   - Test with various input parameters to ensure robust handling

@@ -1,0 +1,10 @@
+NODE_ENV=development
+PORT=9999
+LOG_LEVEL=debug
+
+# Your local turso database url
+DATABASE_URL=http://127.0.0.1:8080
+DATABASE_AUTH_TOKEN=your-auth-token
+
+BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
+BETTER_AUTH_SECRET=your_jwt_secret_here_at_least_32_chars_long

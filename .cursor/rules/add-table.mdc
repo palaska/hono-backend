@@ -1,0 +1,108 @@
+---
+description: Adding a new database table
+globs: 
+alwaysApply: false
+---
+This guide explains how to add a new table to the database schema following the project's convention. If you are asked to add a table, follow this guide only add the table, do not do anything else.
+
+## File Structure
+
+Each database table has its own schema file in the `src/db` directory. The file should be named `<table-name>.schema.ts`.
+
+The main `schema.ts` file re-exports all table schemas.
+
+## Creating a New Table Schema File
+
+1. Create a new file named `<table-name>.schema.ts` in the `src/db` directory
+2. Define the table schema using the `sqliteTable` function
+3. Create related schemas: select, insert, and patch
+
+## Template
+
+```typescript
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+
+export const tableName = sqliteTable("<table-name>", {
+  id: integer({ mode: "number" })
+    .primaryKey({ autoIncrement: true }),
+  // Add your columns here
+  createdAt: integer({ mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+  updatedAt: integer({ mode: "timestamp" })
+    .$defaultFn(() => new Date())
+    .$onUpdate(() => new Date()),
+});
+
+export const selectTableNameSchema = createSelectSchema(tableName);
+
+export const insertTableNameSchema = createInsertSchema(
+  tableName,
+  {
+    // Add validation rules here
+  },
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const patchTableNameSchema = insertTableNameSchema.partial();
+```
+
+## Updating schema.ts
+
+After creating your table schema file, update `src/db/schema.ts` to include your new table:
+
+```typescript
+// Re-export all schemas from table-specific files
+export * from "./tasks.schema";
+export * from "./<table-name>.schema"; // Add this line
+```
+
+## Example
+
+For a table called "users":
+
+1. Create `src/db/users.schema.ts`:
+
+```typescript
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+
+export const users = sqliteTable("users", {
+  id: integer({ mode: "number" })
+    .primaryKey({ autoIncrement: true }),
+  email: text().notNull().unique(),
+  name: text().notNull(),
+  createdAt: integer({ mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+  updatedAt: integer({ mode: "timestamp" })
+    .$defaultFn(() => new Date())
+    .$onUpdate(() => new Date()),
+});
+
+export const selectUsersSchema = createSelectSchema(users);
+
+export const insertUsersSchema = createInsertSchema(
+  users,
+  {
+    email: schema => schema.email(),
+    name: schema => schema.min(1).max(100),
+  },
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const patchUsersSchema = insertUsersSchema.partial();
+```
+
+2. Update `src/db/schema.ts`:
+
+```typescript
+// Re-export all schemas from table-specific files
+export * from "./tasks.schema";
+export * from "./users.schema";
+```
