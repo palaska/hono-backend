@@ -1,0 +1,568 @@
+# Adding a new route module
+This rule outlines the process for adding a new route module. If you are asked to add a route, follow this guide only add the route, do not do anything else.
+
+## Directory Structure
+
+Create a new directory in `src/routes/{feature-name}` with the following files:
+
+1. `{feature-name}.index.ts` - Main export file
+2. `{feature-name}.routes.ts` - Route definitions
+3. `{feature-name}.handlers.ts` - Handler functions
+4. `{feature-name}.test.ts` - Tests for the routes
+
+## File Templates
+
+### {feature-name}.index.ts
+
+```typescript
+import { createRouter } from "@/lib/create-app";
+// Import middleware if needed
+// import { isAuthenticated, isAdmin } from "@/middlewares/auth";
+
+import * as handlers from "./{feature-name}.handlers";
+import * as routes from "./{feature-name}.routes";
+
+const router = createRouter()
+  .openapi(routes.list, handlers.list)
+  .openapi(routes.create, handlers.create)
+  .openapi(routes.getOne, handlers.getOne)
+  .openapi(routes.patch, handlers.patch)
+  .openapi(routes.remove, handlers.remove);
+
+// To apply middleware to handlers:
+// .openapi(routes.list, isAdmin(handlers.list))
+// .openapi(routes.create, isAuthenticated(handlers.create))
+
+export default router;
+```
+
+### {feature-name}.routes.ts
+
+```typescript
+import { createRoute, z } from "@hono/zod-openapi";
+import * as HttpStatusCodes from "stoker/http-status-codes";
+import { jsonContent, jsonContentRequired } from "stoker/openapi/helpers";
+import { createErrorSchema, IdParamsSchema } from "stoker/openapi/schemas";
+
+// Import your schema if needed
+// import { insertYourSchema, patchYourSchema, selectYourSchema } from "@/db/schema";
+import { notFoundSchema, ZOD_ERROR_CODES, ZOD_ERROR_MESSAGES } from "@/lib/constants";
+
+const tags = ["{Feature Name}"]; // Replace with your feature name
+
+// Define your routes here
+export const list = createRoute({
+  path: "/{feature-name}",
+  method: "get",
+  tags,
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.array(z.object({
+        // Define your object schema here
+        id: z.number(),
+        name: z.string(),
+        // Add other fields as needed
+      })),
+      "The list of items",
+    ),
+  },
+});
+
+export const create = createRoute({
+  path: "/{feature-name}",
+  method: "post",
+  request: {
+    body: jsonContentRequired(
+      z.object({
+        // Define required fields for creation
+        name: z.string().min(1),
+        // Add other fields as needed
+      }),
+      "The item to create",
+    ),
+  },
+  tags,
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        // Define your object schema here
+        id: z.number(),
+        name: z.string(),
+        // Add other fields as needed
+      }),
+      "The created item",
+    ),
+    [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
+      createErrorSchema(z.object({
+        name: z.string().min(1),
+        // Add other fields as needed
+      })),
+      "The validation error(s)",
+    ),
+  },
+});
+
+export const getOne = createRoute({
+  path: "/{feature-name}/{id}",
+  method: "get",
+  request: {
+    params: IdParamsSchema,
+  },
+  tags,
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        // Define your object schema here
+        id: z.number(),
+        name: z.string(),
+        // Add other fields as needed
+      }),
+      "The requested item",
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Item not found",
+    ),
+    [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
+      createErrorSchema(IdParamsSchema),
+      "Invalid id error",
+    ),
+  },
+});
+
+export const patch = createRoute({
+  path: "/{feature-name}/{id}",
+  method: "patch",
+  request: {
+    params: IdParamsSchema,
+    body: jsonContentRequired(
+      z.object({
+        // Define optional fields for update
+        name: z.string().min(1).optional(),
+        // Add other fields as needed
+      }).refine((data) => Object.keys(data).length > 0, {
+        message: ZOD_ERROR_MESSAGES.NO_UPDATES,
+        path: [],
+        code: ZOD_ERROR_CODES.INVALID_UPDATES,
+      }),
+      "The item updates",
+    ),
+  },
+  tags,
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        // Define your object schema here
+        id: z.number(),
+        name: z.string(),
+        // Add other fields as needed
+      }),
+      "The updated item",
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Item not found",
+    ),
+    [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
+      createErrorSchema(z.object({
+        name: z.string().min(1).optional(),
+        // Add other fields as needed
+      }))
+        .or(createErrorSchema(IdParamsSchema)),
+      "The validation error(s)",
+    ),
+  },
+});
+
+export const remove = createRoute({
+  path: "/{feature-name}/{id}",
+  method: "delete",
+  request: {
+    params: IdParamsSchema,
+  },
+  tags,
+  responses: {
+    [HttpStatusCodes.NO_CONTENT]: {
+      description: "Item deleted successfully",
+    },
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Item not found",
+    ),
+    [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
+      createErrorSchema(IdParamsSchema),
+      "Invalid id error",
+    ),
+  },
+});
+
+// Export types for the handlers
+export type ListRoute = typeof list;
+export type CreateRoute = typeof create;
+export type GetOneRoute = typeof getOne;
+export type PatchRoute = typeof patch;
+export type RemoveRoute = typeof remove;
+```
+
+### {feature-name}.handlers.ts
+
+```typescript
+import { eq } from "drizzle-orm";
+import * as HttpStatusCodes from "stoker/http-status-codes";
+import * as HttpStatusPhrases from "stoker/http-status-phrases";
+
+import type { AppRouteHandler } from "@/lib/types";
+
+import { createDb } from "@/db";
+import { ZOD_ERROR_CODES, ZOD_ERROR_MESSAGES } from "@/lib/constants";
+// import { yourTable } from "@/db/schema";
+
+// Import route types
+import type { CreateRoute, GetOneRoute, ListRoute, PatchRoute, RemoveRoute } from "./{feature-name}.routes";
+
+// Define your handlers here
+export const list: AppRouteHandler<ListRoute> = async (c) => {
+  const { db } = createDb(c.env);
+  // const items = await db.query.yourTable.findMany();
+  const items = []; // Replace with actual query
+  return c.json(items);
+};
+
+export const create: AppRouteHandler<CreateRoute> = async (c) => {
+  const { db } = createDb(c.env);
+  const item = c.req.valid("json");
+  // const [inserted] = await db.insert(yourTable).values(item).returning();
+  const inserted = { id: 1, ...item }; // Replace with actual insert
+  return c.json(inserted, HttpStatusCodes.OK);
+};
+
+export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
+  const { db } = createDb(c.env);
+  const { id } = c.req.valid("param");
+  // const item = await db.query.yourTable.findFirst({
+  //   where(fields, operators) {
+  //     return operators.eq(fields.id, id);
+  //   },
+  // });
+  const item = null; // Replace with actual query
+  
+  if (!item) {
+    return c.json(
+      {
+        message: HttpStatusPhrases.NOT_FOUND,
+      },
+      HttpStatusCodes.NOT_FOUND,
+    );
+  }
+  
+  return c.json(item, HttpStatusCodes.OK);
+};
+
+export const patch: AppRouteHandler<PatchRoute> = async (c) => {
+  const { db } = createDb(c.env);
+  const { id } = c.req.valid("param");
+  const updates = c.req.valid("json");
+  
+  if (Object.keys(updates).length === 0) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          issues: [
+            {
+              code: ZOD_ERROR_CODES.INVALID_UPDATES,
+              path: [],
+              message: ZOD_ERROR_MESSAGES.NO_UPDATES,
+            },
+          ],
+          name: "ZodError",
+        },
+      },
+      HttpStatusCodes.UNPROCESSABLE_ENTITY,
+    );
+  }
+  
+  // const [updated] = await db.update(yourTable)
+  //   .set(updates)
+  //   .where(eq(yourTable.id, id))
+  //   .returning();
+  const updated = null; // Replace with actual update
+  
+  if (!updated) {
+    return c.json(
+      {
+        message: HttpStatusPhrases.NOT_FOUND,
+      },
+      HttpStatusCodes.NOT_FOUND,
+    );
+  }
+  
+  return c.json(updated, HttpStatusCodes.OK);
+};
+
+export const remove: AppRouteHandler<RemoveRoute> = async (c) => {
+  const { db } = createDb(c.env);
+  const { id } = c.req.valid("param");
+  
+  // const result = await db.delete(yourTable)
+  //   .where(eq(yourTable.id, id));
+  // 
+  // if (result.rowsAffected === 0) {
+  //   return c.json(
+  //     {
+  //       message: HttpStatusPhrases.NOT_FOUND,
+  //     },
+  //     HttpStatusCodes.NOT_FOUND,
+  //   );
+  // }
+  
+  return c.body(null, HttpStatusCodes.NO_CONTENT);
+};
+```
+
+### {feature-name}.test.ts
+
+```typescript
+/* eslint-disable ts/ban-ts-comment */
+import { testClient } from "hono/testing";
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+import * as HttpStatusPhrases from "stoker/http-status-phrases";
+import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from "vitest";
+import { ZodIssueCode } from "zod";
+
+import env from "@/env-runtime";
+import { ZOD_ERROR_CODES, ZOD_ERROR_MESSAGES } from "@/lib/constants";
+import { createTestApp } from "@/lib/create-app";
+
+import router from "./{feature-name}.index";
+
+if (env.NODE_ENV !== "test") {
+  throw new Error("NODE_ENV must be 'test'");
+}
+
+const client = testClient(createTestApp(router));
+
+describe("{feature-name} routes", () => {
+  beforeAll(async () => {
+    execSync("pnpm drizzle-kit push");
+  });
+
+  afterAll(async () => {
+    fs.rmSync("test.db", { force: true });
+  });
+
+  it("post /{feature-name} validates the body when creating", async () => {
+    const response = await client.{feature-name}.$post({
+      // @ts-expect-error
+      json: {
+        // Missing required fields
+      },
+    });
+    expect(response.status).toBe(422);
+    if (response.status === 422) {
+      const json = await response.json();
+      expect(json.error.issues[0].path[0]).toBe("name");
+      expect(json.error.issues[0].message).toBe(ZOD_ERROR_MESSAGES.REQUIRED);
+    }
+  });
+
+  const id = 1;
+  const name = "Test Item";
+
+  it("post /{feature-name} creates an item", async () => {
+    const response = await client.{feature-name}.$post({
+      json: {
+        name,
+        // Add other required fields
+      },
+    });
+    expect(response.status).toBe(200);
+    if (response.status === 200) {
+      const json = await response.json();
+      expect(json.name).toBe(name);
+    }
+  });
+
+  it("get /{feature-name} lists all items", async () => {
+    const response = await client.{feature-name}.$get();
+    expect(response.status).toBe(200);
+    if (response.status === 200) {
+      const json = await response.json();
+      expectTypeOf(json).toBeArray();
+      expect(json.length).toBe(1);
+    }
+  });
+
+  it("get /{feature-name}/{id} validates the id param", async () => {
+    const response = await client.{feature-name}[":id"].$get({
+      param: {
+        // @ts-expect-error
+        id: "wat",
+      },
+    });
+    expect(response.status).toBe(422);
+    if (response.status === 422) {
+      const json = await response.json();
+      expect(json.error.issues[0].path[0]).toBe("id");
+      expect(json.error.issues[0].message).toBe(ZOD_ERROR_MESSAGES.EXPECTED_NUMBER);
+    }
+  });
+
+  it("get /{feature-name}/{id} returns 404 when item not found", async () => {
+    const response = await client.{feature-name}[":id"].$get({
+      param: {
+        id: 999,
+      },
+    });
+    expect(response.status).toBe(404);
+    if (response.status === 404) {
+      const json = await response.json();
+      expect(json.message).toBe(HttpStatusPhrases.NOT_FOUND);
+    }
+  });
+
+  it("get /{feature-name}/{id} gets a single item", async () => {
+    const response = await client.{feature-name}[":id"].$get({
+      param: {
+        id,
+      },
+    });
+    expect(response.status).toBe(200);
+    if (response.status === 200) {
+      const json = await response.json();
+      expect(json.name).toBe(name);
+    }
+  });
+
+  it("patch /{feature-name}/{id} validates the body when updating", async () => {
+    const response = await client.{feature-name}[":id"].$patch({
+      param: {
+        id,
+      },
+      json: {
+        name: "",
+      },
+    });
+    expect(response.status).toBe(422);
+    if (response.status === 422) {
+      const json = await response.json();
+      expect(json.error.issues[0].path[0]).toBe("name");
+      expect(json.error.issues[0].code).toBe(ZodIssueCode.too_small);
+    }
+  });
+
+  it("patch /{feature-name}/{id} validates the id param", async () => {
+    const response = await client.{feature-name}[":id"].$patch({
+      param: {
+        // @ts-expect-error
+        id: "wat",
+      },
+      json: {},
+    });
+    expect(response.status).toBe(422);
+    if (response.status === 422) {
+      const json = await response.json();
+      expect(json.error.issues[0].path[0]).toBe("id");
+      expect(json.error.issues[0].message).toBe(ZOD_ERROR_MESSAGES.EXPECTED_NUMBER);
+    }
+  });
+
+  it("patch /{feature-name}/{id} validates empty body", async () => {
+    const response = await client.{feature-name}[":id"].$patch({
+      param: {
+        id,
+      },
+      json: {},
+    });
+    expect(response.status).toBe(422);
+    if (response.status === 422) {
+      const json = await response.json();
+      expect(json.error.issues[0].code).toBe(ZOD_ERROR_CODES.INVALID_UPDATES);
+      expect(json.error.issues[0].message).toBe(ZOD_ERROR_MESSAGES.NO_UPDATES);
+    }
+  });
+
+  it("patch /{feature-name}/{id} updates a single property of an item", async () => {
+    const response = await client.{feature-name}[":id"].$patch({
+      param: {
+        id,
+      },
+      json: {
+        // Update a field
+        name: "Updated Name",
+      },
+    });
+    expect(response.status).toBe(200);
+    if (response.status === 200) {
+      const json = await response.json();
+      expect(json.name).toBe("Updated Name");
+    }
+  });
+
+  it("delete /{feature-name}/{id} validates the id when deleting", async () => {
+    const response = await client.{feature-name}[":id"].$delete({
+      param: {
+        // @ts-expect-error
+        id: "wat",
+      },
+    });
+    expect(response.status).toBe(422);
+    if (response.status === 422) {
+      const json = await response.json();
+      expect(json.error.issues[0].path[0]).toBe("id");
+      expect(json.error.issues[0].message).toBe(ZOD_ERROR_MESSAGES.EXPECTED_NUMBER);
+    }
+  });
+
+  it("delete /{feature-name}/{id} removes an item", async () => {
+    const response = await client.{feature-name}[":id"].$delete({
+      param: {
+        id,
+      },
+    });
+    expect(response.status).toBe(204);
+  });
+});
+```
+
+## Register the Route
+
+After creating your route files, register the route in `src/app.ts`:
+
+```typescript
+// Add import
+import yourFeature from "@/routes/{feature-name}/{feature-name}.index";
+
+const routes = [
+  index,
+  tasks,
+  auth,
+  // Add your route here
+  yourFeature,
+] as const;
+```
+
+## Important Notes
+
+1. Follow naming conventions:
+   - Use kebab-case for directory names
+   - Use camelCase for file names and exports
+   - Use PascalCase for types
+
+2. Test Setup:
+   - Use `testClient` from "hono/testing" with `createTestApp` from "@/lib/create-app"
+   - Set up database with `pnpm drizzle-kit push` in `beforeAll`
+   - Clean up database with `fs.rmSync("test.db", { force: true })` in `afterAll`
+
+3. OpenAPI/Swagger:
+   - Document all endpoints with proper schemas
+   - Use the `createRoute` method from `@hono/zod-openapi`
+   - Define response types and error handling
+   
+4. Standard Endpoints:
+   - GET /{feature-name} - List all items
+   - GET /{feature-name}/:id - Get a single item
+   - POST /{feature-name} - Create a new item
+   - PATCH /{feature-name}/:id - Update an existing item
+   - DELETE /{feature-name}/:id - Remove an item 

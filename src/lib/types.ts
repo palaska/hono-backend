@@ -3,23 +3,20 @@ import type { Schema } from "hono";
 import type { PinoLogger } from "hono-pino";
 
 import type { Db } from "@/db";
-// We need to import the user schema type
-// import type { users } from "@/db/users.schema";
 import type { Environment } from "@/env";
-
-// Create a type for the user based on the schema table
-// type User = typeof users.$inferSelect;
 
 export interface AppBindings {
   Bindings: Environment;
   Variables: {
     logger: PinoLogger;
+    // Database will be attached by the db middleware
+    db: Db;
+
     // better-auth
-    auth?: any;
+    auth: any;
     user?: any;
     session?: any;
 
-    db?: Db; // Database will be attached by the db middleware
   };
 };
 
