@@ -8,6 +8,7 @@ import { notFound, onError, serveEmojiFavicon } from "stoker/middlewares";
 import { defaultHook } from "stoker/openapi";
 
 import { parseEnv } from "@/env";
+import { initEmailService } from "@/lib/email";
 import { authMiddleware } from "@/middlewares/auth";
 import { dbMiddleware } from "@/middlewares/db";
 import { pinoLogger } from "@/middlewares/pino-logger";
@@ -39,6 +40,10 @@ export default function createApp() {
   app.use((c, next) => {
     // eslint-disable-next-line node/no-process-env
     c.env = parseEnv(Object.assign(c.env || {}, process.env));
+
+    // Initialize email service
+    initEmailService(c.env);
+
     return next();
   });
 

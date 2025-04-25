@@ -8,3 +8,10 @@ DATABASE_AUTH_TOKEN=your-auth-token
 
 BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
 BETTER_AUTH_SECRET=your_jwt_secret_here_at_least_32_chars_long
+
+# Email configuration
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-username
+SMTP_PASS=your-smtp-password
+EMAIL_FROM=noreply@example.com
